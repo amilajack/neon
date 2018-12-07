@@ -214,12 +214,25 @@ public:
     }
   }
 
+  void SetWrappedAllocation(void *wrapped_allocation) {
+    wrapped_allocation_ = wrapped_allocation;
+  }
+
+  void *GetAndClearWrappedAllocation() {
+    void *wrapped;
+    wrapped = wrapped_allocation_;
+    wrapped_allocation_ = nullptr;
+    return wrapped;
+  }
+
 private:
 
   Neon_AllocateCallback allocate_callback_;
   void *allocate_kernel_;
   Neon_DropCallback drop_instance_;
   v8::Global<v8::Object> instance_;
+
+  void *wrapped_allocation_;
 };
 
 }; // end namespace neon

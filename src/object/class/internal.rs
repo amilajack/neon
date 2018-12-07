@@ -85,13 +85,19 @@ impl<T: Class> Callback<*mut c_void> for AllocateCallback<T> {
         unsafe {
             info.with_cx(|cx| {
                 let data = info.data();
-                let kernel: fn(CallContext<JsUndefined>) -> NeonResult<T::Internals> =
-                    mem::transmute(neon_runtime::class::get_allocate_kernel(data.to_raw()));
-                if let Ok(value) = convert_panics(|| { kernel(cx) }) {
-                    let p = Box::into_raw(Box::new(value));
-                    mem::transmute(p)
+
+                let wrapped = neon_runtime::class::get_and_clear_wrapped_allocation(data.to_raw());
+                if wrapped.is_null() {
+                   let kernel: fn(CallContext<JsUndefined>) -> NeonResult<T::Internals> =
+                        mem::transmute(neon_runtime::class::get_allocate_kernel(data.to_raw()));
+                    if let Ok(value) = convert_panics(|| { kernel(cx) }) {
+                        let p = Box::into_raw(Box::new(value));
+                        mem::transmute(p)
+                    } else {
+                        null_mut()
+                    }
                 } else {
-                    null_mut()
+                    wrapped
                 }
             })
         }
@@ -140,6 +146,11 @@ impl ClassMetadata {
         build(|out| {
             neon_runtime::class::metadata_to_constructor(out, mem::transmute(cx.isolate()), self.pointer)
         })
+    }
+
+    pub unsafe fn set_wrapped_allocation<T>(&self, wrapped: T) {
+        let p = Box::into_raw(Box::new(wrapped));
+        neon_runtime::class::set_wrapped_allocation(self.pointer, mem::transmute(p));
     }
 
     pub unsafe fn has_instance(&self, value: raw::Local) -> bool {

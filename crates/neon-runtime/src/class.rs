@@ -46,6 +46,12 @@ extern "C" {
     #[link_name = "Neon_Class_GetCallKernel"]
     pub fn get_call_kernel(obj: Local) -> *mut c_void;
 
+    #[link_name = "Neon_Class_SetWrappedAllocation"]
+    pub fn set_wrapped_allocation(metadata: *mut c_void, wrapped_allocaton: *mut c_void);
+
+    #[link_name = "Neon_Class_GetAndClearWrappedAllocation"]
+    pub fn get_and_clear_wrapped_allocation(obj: Local) -> *mut c_void;
+
     #[link_name = "Neon_Class_Constructor"]
     pub fn constructor(out: &mut Local, ft: Local) -> bool;
 
@@ -54,5 +60,4 @@ extern "C" {
 
     #[link_name = "Neon_Class_GetInstanceInternals"]
     pub fn get_instance_internals(obj: Local) -> *mut c_void;
-
 }
