@@ -100,19 +100,13 @@ impl<T: Class> Callback<*mut c_void> for AllocateCallback<T> {
         unsafe {
             info.with_cx(|cx| {
                 let data = info.data();
-
-                let wrapped = neon_runtime::class::get_and_clear_wrapped_allocation(data.to_raw());
-                if wrapped.is_null() {
-                   let kernel: fn(CallContext<JsUndefined>) -> NeonResult<T::Internals> =
-                        mem::transmute(neon_runtime::class::get_allocate_kernel(data.to_raw()));
-                    if let Ok(value) = convert_panics(|| { kernel(cx) }) {
-                        let p = Box::into_raw(Box::new(value));
-                        mem::transmute(p)
-                    } else {
-                        null_mut()
-                    }
+                let kernel: fn(CallContext<JsUndefined>) -> NeonResult<T::Internals> =
+                    mem::transmute(neon_runtime::class::get_allocate_kernel(data.to_raw()));
+                if let Ok(value) = convert_panics(|| { kernel(cx) }) {
+                    let p = Box::into_raw(Box::new(value));
+                    mem::transmute(p)
                 } else {
-                    wrapped
+                    null_mut()
                 }
             })
         }

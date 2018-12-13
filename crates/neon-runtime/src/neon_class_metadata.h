@@ -220,10 +220,16 @@ public:
   }
 
   virtual void construct(const v8::FunctionCallbackInfo<v8::Value>& info) {
+    void *internals;
     bool is_wrapped = wrapped_allocation_;
-    void *internals = allocate_callback_(&info);
-    if (!internals) {
-      return;
+    if(is_wrapped) {
+      internals = wrapped_allocation_;
+      wrapped_allocation_ = nullptr;
+    } else {
+      internals = allocate_callback_(&info);
+      if (!internals) {
+        return;
+      }
     }
     v8::Local<v8::Object> self = info.This();
     BaseClassInstanceMetadata *instance = new BaseClassInstanceMetadata(info.GetIsolate(), self, internals, drop_instance_);
@@ -237,13 +243,6 @@ public:
 
   void SetWrappedAllocation(void *wrapped_allocation) {
     wrapped_allocation_ = wrapped_allocation;
-  }
-
-  void *GetAndClearWrappedAllocation() {
-    void *wrapped;
-    wrapped = wrapped_allocation_;
-    wrapped_allocation_ = nullptr;
-    return wrapped;
   }
 
   virtual void SetName(Slice name) {

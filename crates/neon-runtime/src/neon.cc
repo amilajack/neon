@@ -349,11 +349,6 @@ extern "C" void Neon_Class_SetWrappedAllocation(void *metadata_pointer, void *wr
   metadata->SetWrappedAllocation(wrapped_allocation);
 }
 
-extern "C" void *Neon_Class_GetAndClearWrappedAllocation(v8::Local<v8::External> wrapper) {
-  neon::BaseClassMetadata *metadata = static_cast<neon::BaseClassMetadata *>(wrapper->Value());
-  return metadata->GetAndClearWrappedAllocation();
-}
-
 extern "C" bool Neon_Class_Constructor(v8::Local<v8::Function> *out, v8::Local<v8::FunctionTemplate> ft) {
   v8::MaybeLocal<v8::Function> maybe = ft->GetFunction();
   return maybe.ToLocal(out);
