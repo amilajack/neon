@@ -344,9 +344,9 @@ extern "C" void *Neon_Class_GetAllocateKernel(v8::Local<v8::External> wrapper) {
   return metadata->GetAllocateKernel();
 }
 
-extern "C" void Neon_Class_SetWrappedAllocation(void *metadata_pointer, void *wrapped_allocation) {
+extern "C" void Neon_Class_SetExistingInternal(void *metadata_pointer, void *existing_internal) {
   neon::BaseClassMetadata *metadata = static_cast<neon::BaseClassMetadata *>(metadata_pointer);
-  metadata->SetWrappedAllocation(wrapped_allocation);
+  metadata->SetExistingInternal(existing_internal);
 }
 
 extern "C" bool Neon_Class_Constructor(v8::Local<v8::Function> *out, v8::Local<v8::FunctionTemplate> ft) {

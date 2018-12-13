@@ -221,10 +221,10 @@ public:
 
   virtual void construct(const v8::FunctionCallbackInfo<v8::Value>& info) {
     void *internals;
-    bool is_wrapped = wrapped_allocation_;
-    if(is_wrapped) {
-      internals = wrapped_allocation_;
-      wrapped_allocation_ = nullptr;
+    bool from_existing = existing_internal_;
+    if(from_existing) {
+      internals = existing_internal_;
+      existing_internal_ = nullptr;
     } else {
       internals = allocate_callback_(&info);
       if (!internals) {
@@ -234,15 +234,15 @@ public:
     v8::Local<v8::Object> self = info.This();
     BaseClassInstanceMetadata *instance = new BaseClassInstanceMetadata(info.GetIsolate(), self, internals, drop_instance_);
     self->SetAlignedPointerInInternalField(0, instance);
-    if (is_wrapped && existing_kernel_) {
+    if (from_existing && existing_kernel_) {
       existing_callback_(&info);
     } else if (construct_kernel_) {
       construct_callback_(&info);
     }
   }
 
-  void SetWrappedAllocation(void *wrapped_allocation) {
-    wrapped_allocation_ = wrapped_allocation;
+  void SetExistingInternal(void *existing_internal) {
+    existing_internal_ = existing_internal;
   }
 
   virtual void SetName(Slice name) {
@@ -270,7 +270,7 @@ private:
   Neon_DropCallback drop_instance_;
   v8::Global<v8::Object> instance_;
 
-  void *wrapped_allocation_;
+  void *existing_internal_;
   String *allocate_error_;
 };
 

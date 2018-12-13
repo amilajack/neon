@@ -184,9 +184,9 @@ impl ClassMetadata {
         })
     }
 
-    pub unsafe fn set_wrapped_allocation<T>(&self, wrapped: T) {
-        let p = Box::into_raw(Box::new(wrapped));
-        neon_runtime::class::set_wrapped_allocation(self.pointer, mem::transmute(p));
+    pub unsafe fn set_existing_internal<T>(&self, existing: T) {
+        let p = Box::into_raw(Box::new(existing));
+        neon_runtime::class::set_existing_internal(self.pointer, mem::transmute(p));
     }
 
     pub unsafe fn has_instance(&self, value: raw::Local) -> bool {

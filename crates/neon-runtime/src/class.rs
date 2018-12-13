@@ -53,8 +53,8 @@ extern "C" {
     #[link_name = "Neon_Class_GetCallKernel"]
     pub fn get_call_kernel(obj: Local) -> *mut c_void;
 
-    #[link_name = "Neon_Class_SetWrappedAllocation"]
-    pub fn set_wrapped_allocation(metadata: *mut c_void, wrapped_allocaton: *mut c_void);
+    #[link_name = "Neon_Class_SetExistingInternal"]
+    pub fn set_existing_internal(metadata: *mut c_void, existing_internal: *mut c_void);
 
     #[link_name = "Neon_Class_Constructor"]
     pub fn constructor(out: &mut Local, ft: Local) -> bool;

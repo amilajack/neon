@@ -129,13 +129,14 @@ pub trait Class: Managed + Any {
         constructor.construct(cx, args)
     }
 
-    fn new_from_existing<'a, 'b, C: Context<'a>, A, AS>(cx: &mut C, existing: Self::Internals, args: AS) -> JsResult<'a, Self>
+    /// Method for constructing new instances of this class from an existing rust struct instance.
+    fn from_existing<'a, 'b, C: Context<'a>, A, AS>(cx: &mut C, existing: Self::Internals, args: AS) -> JsResult<'a, Self>
         where A: Value + 'b,
               AS: IntoIterator<Item=Handle<'b, A>>
     {
         let metadata = Self::metadata(cx)?;
         let constructor = unsafe { metadata.constructor(cx)? };
-        unsafe { metadata.set_wrapped_allocation::<Self::Internals>(existing) };
+        unsafe { metadata.set_existing_internal::<Self::Internals>(existing) };
         constructor.construct(cx, args)
     }
 
