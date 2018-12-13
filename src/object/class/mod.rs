@@ -7,6 +7,7 @@ use std::mem;
 use std::os::raw::c_void;
 use std::slice;
 use std::collections::HashMap;
+use std::iter;
 use neon_runtime;
 use neon_runtime::raw;
 use neon_runtime::call::CCallback;
@@ -130,7 +131,8 @@ pub trait Class: Managed + Any {
     }
 
     /// Method for constructing new instances of this class from an existing rust struct instance.
-    fn from_existing<'a, 'b, C: Context<'a>, A, AS>(cx: &mut C, existing: Self::Internals, args: AS) -> JsResult<'a, Self>
+    /// Supply args into the [[Constructor]] behavour if needed
+    fn from_existing_withargs<'a, 'b, C: Context<'a>, A, AS>(cx: &mut C, existing: Self::Internals, args: AS) -> JsResult<'a, Self>
         where A: Value + 'b,
               AS: IntoIterator<Item=Handle<'b, A>>
     {
@@ -138,6 +140,13 @@ pub trait Class: Managed + Any {
         let constructor = unsafe { metadata.constructor(cx)? };
         unsafe { metadata.set_existing_internal::<Self::Internals>(existing) };
         constructor.construct(cx, args)
+    }
+
+    /// Method for constructing new instances of this class from an
+    /// existing rust struct instance without any args
+    fn from_existing<'a, C: Context<'a>>(cx: &mut C, existing: Self::Internals) -> JsResult<'a, Self>
+    {
+        Self::from_existing_withargs(cx, existing, iter::empty::<Handle<JsValue>>())
     }
 
     #[doc(hidden)]
