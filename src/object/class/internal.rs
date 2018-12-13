@@ -136,6 +136,33 @@ impl<T: Class> Callback<bool> for ConstructCallback<T> {
 }
 
 #[repr(C)]
+pub struct ConstructExistingCallback<T: Class>(pub fn(CallContext<T>) -> NeonResult<Option<Handle<JsObject>>>);
+
+impl<T: Class> Callback<bool> for ConstructExistingCallback<T> {
+    extern "C" fn invoke(info: &CallbackInfo) -> bool {
+        unsafe {
+            info.with_cx(|cx| {
+                let data = info.data();
+                let kernel: fn(CallContext<T>) -> NeonResult<Option<Handle<JsObject>>> =
+                    mem::transmute(neon_runtime::class::get_construct_existing_kernel(data.to_raw()));
+                match convert_panics(|| { kernel(cx) }) {
+                    Ok(None) => true,
+                    Ok(Some(obj)) => {
+                        info.set_return(obj);
+                        true
+                    }
+                    _ => false
+                }
+            })
+        }
+    }
+
+    fn as_ptr(self) -> *mut c_void {
+        self.0 as *mut c_void
+    }
+}
+
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct ClassMetadata {
     pub(crate) pointer: *mut c_void

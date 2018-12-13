@@ -288,13 +288,15 @@ extern "C" void Neon_Class_ConstructBaseCallback(const v8::FunctionCallbackInfo<
 extern "C" void *Neon_Class_CreateBase(v8::Isolate *isolate,
                                        callback_t allocate,
                                        callback_t construct,
+                                       callback_t existing,
                                        callback_t call,
                                        Neon_DropCallback drop)
 {
   Neon_AllocateCallback allocate_callback = reinterpret_cast<Neon_AllocateCallback>(allocate.static_callback);
   Neon_ConstructCallback construct_callback = reinterpret_cast<Neon_ConstructCallback>(construct.static_callback);
+  Neon_ConstructCallback existing_callback = reinterpret_cast<Neon_ConstructCallback>(existing.static_callback);
   v8::FunctionCallback call_callback = reinterpret_cast<v8::FunctionCallback>(call.static_callback);
-  neon::BaseClassMetadata *metadata = new neon::BaseClassMetadata(construct_callback, construct.dynamic_callback, call_callback, call.dynamic_callback, allocate_callback, allocate.dynamic_callback, drop);
+  neon::BaseClassMetadata *metadata = new neon::BaseClassMetadata(construct_callback, construct.dynamic_callback,existing_callback, existing.dynamic_callback, call_callback, call.dynamic_callback, allocate_callback, allocate.dynamic_callback, drop);
   v8::Local<v8::External> data = v8::External::New(isolate, metadata);
   v8::Local<v8::FunctionTemplate> constructor_template = v8::FunctionTemplate::New(isolate, Neon_Class_ConstructBaseCallback, data);
   metadata->SetTemplate(isolate, constructor_template);
@@ -330,6 +332,11 @@ extern "C" void *Neon_Class_GetCallKernel(v8::Local<v8::External> wrapper) {
 extern "C" void *Neon_Class_GetConstructKernel(v8::Local<v8::External> wrapper) {
   neon::ClassMetadata *metadata = static_cast<neon::ClassMetadata *>(wrapper->Value());
   return metadata->GetConstructKernel();
+}
+
+extern "C" void *Neon_Class_GetConstructExistingKernel(v8::Local<v8::External> wrapper) {
+  neon::ClassMetadata *metadata = static_cast<neon::ClassMetadata *>(wrapper->Value());
+  return metadata->GetConstructExistingKernel();
 }
 
 extern "C" void *Neon_Class_GetAllocateKernel(v8::Local<v8::External> wrapper) {

@@ -55,9 +55,16 @@ private:
 class ClassMetadata {
 public:
 
-  ClassMetadata(Neon_ConstructCallback construct_callback, void *construct_kernel, v8::FunctionCallback call_callback, void *call_kernel) {
+  ClassMetadata(Neon_ConstructCallback construct_callback, 
+                void *construct_kernel,
+                Neon_ConstructCallback existing_callback,
+                void *existing_kernel,
+                v8::FunctionCallback call_callback,
+                void *call_kernel) {
     construct_callback_ = construct_callback;
     construct_kernel_ = construct_kernel;
+    existing_callback_ = existing_callback;
+    existing_kernel_ = existing_kernel;
     call_callback_ = call_callback;
     call_kernel_ = call_kernel;
     class_name_ = nullptr;
@@ -86,6 +93,10 @@ public:
 
   void *GetConstructKernel() {
     return construct_kernel_;
+  }
+
+  void *GetConstructExistingKernel() {
+    return existing_kernel_;
   }
 
   void SetName(Slice name) {
@@ -128,6 +139,8 @@ protected:
 
   Neon_ConstructCallback construct_callback_;
   void *construct_kernel_;
+  Neon_ConstructCallback existing_callback_;
+  void *existing_kernel_;
   v8::FunctionCallback call_callback_;
   void *call_kernel_;
 
@@ -185,12 +198,16 @@ public:
 
   BaseClassMetadata(Neon_ConstructCallback construct_callback,
                     void *construct_kernel,
+                    Neon_ConstructCallback existing_callback,
+                    void *existing_kernel,
                     v8::FunctionCallback call_callback,
                     void *call_kernel,
                     Neon_AllocateCallback allocate_callback,
                     void *allocate_kernel,
                     Neon_DropCallback drop_instance)
-    : ClassMetadata(construct_callback, construct_kernel, call_callback, call_kernel)
+    : ClassMetadata(construct_callback, construct_kernel, 
+                    existing_callback, existing_kernel, 
+                    call_callback, call_kernel)
   {
     allocate_callback_ = allocate_callback;
     allocate_kernel_ = allocate_kernel;
@@ -202,6 +219,7 @@ public:
   }
 
   virtual void construct(const v8::FunctionCallbackInfo<v8::Value>& info) {
+    bool is_wrapped = wrapped_allocation_;
     void *internals = allocate_callback_(&info);
     if (!internals) {
       return;
@@ -209,7 +227,9 @@ public:
     v8::Local<v8::Object> self = info.This();
     BaseClassInstanceMetadata *instance = new BaseClassInstanceMetadata(info.GetIsolate(), self, internals, drop_instance_);
     self->SetAlignedPointerInInternalField(0, instance);
-    if (construct_kernel_) {
+    if (is_wrapped && existing_kernel_) {
+      existing_callback_(&info);
+    } else if (construct_kernel_) {
       construct_callback_(&info);
     }
   }

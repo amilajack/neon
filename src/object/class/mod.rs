@@ -18,7 +18,7 @@ use handle::{Handle, Managed};
 use types::{Value, JsFunction, JsValue, build};
 use types::internal::ValueInternal;
 use object::{Object, This};
-use self::internal::{ClassMetadata, MethodCallback, ConstructorCallCallback, AllocateCallback, ConstructCallback};
+use self::internal::{ClassMetadata, MethodCallback, ConstructorCallCallback, AllocateCallback, ConstructCallback, ConstructExistingCallback};
 
 pub(crate) struct ClassMap {
     map: HashMap<TypeId, ClassMetadata>
@@ -46,6 +46,7 @@ pub struct ClassDescriptor<'a, T: Class> {
     allocate: AllocateCallback<T>,
     call: Option<ConstructorCallCallback>,
     construct: Option<ConstructCallback<T>>,
+    existing: Option<ConstructExistingCallback<T>>,
     methods: Vec<(&'a str, MethodCallback<T>)>
 }
 
@@ -58,6 +59,7 @@ impl<'a, T: Class> ClassDescriptor<'a, T> {
             allocate: allocate,
             call: None,
             construct: None,
+            existing: None,
             methods: Vec::new()
         }
     }
@@ -71,6 +73,13 @@ impl<'a, T: Class> ClassDescriptor<'a, T> {
     /// Adds `[[Construct]]` behavior for the constructor to this class descriptor.
     pub fn construct(mut self, callback: ConstructCallback<T>) -> Self {
         self.construct = Some(callback);
+        self
+    }
+
+    /// Adds `[[Construct]]` behavior for the constructor to this class descriptor
+    /// for existing rust struct instance
+    pub fn existing(mut self, callback: ConstructExistingCallback<T>) -> Self {
+        self.existing = Some(callback);
         self
     }
 
@@ -158,11 +167,13 @@ pub(crate) trait ClassInternal: Class {
 
             let allocate = descriptor.allocate.into_c_callback();
             let construct = descriptor.construct.map(|callback| callback.into_c_callback()).unwrap_or_default();
+            let existing = descriptor.existing.map(|callback| callback.into_c_callback()).unwrap_or_default();
             let call = descriptor.call.unwrap_or_else(ConstructorCallCallback::default::<Self>).into_c_callback();
 
             let metadata_pointer = neon_runtime::class::create_base(isolate,
                                                                     allocate,
                                                                     construct,
+                                                                    existing,
                                                                     call,
                                                                     drop_internals::<Self::Internals>);
 

@@ -14,6 +14,7 @@ extern "C" {
     pub fn create_base(isolate: *mut Isolate,
                        allocate: CCallback,
                        construct: CCallback,
+                       existing: CCallback,
                        call: CCallback,
                        drop: extern "C" fn(*mut c_void)) -> *mut c_void;
 
@@ -42,6 +43,9 @@ extern "C" {
 
     #[link_name = "Neon_Class_GetConstructKernel"]
     pub fn get_construct_kernel(obj: Local) -> *mut c_void;
+
+    #[link_name = "Neon_Class_GetConstructExistingKernel"]
+    pub fn get_construct_existing_kernel(obj: Local) -> *mut c_void;
 
     #[link_name = "Neon_Class_GetCallKernel"]
     pub fn get_call_kernel(obj: Local) -> *mut c_void;
