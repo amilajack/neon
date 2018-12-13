@@ -24,6 +24,9 @@ extern "C" {
     #[link_name = "Neon_Class_SetName"]
     pub fn set_name(isolate: *mut Isolate, metadata: *mut c_void, name: *const u8, byte_length: u32) -> bool;
 
+    #[link_name = "Neon_Class_ThrowAllocateError"]
+    pub fn throw_allocate_error(isolate: *mut Isolate, metadata: *mut c_void);
+
     #[link_name = "Neon_Class_ThrowCallError"]
     pub fn throw_call_error(isolate: *mut Isolate, metadata: *mut c_void);
 

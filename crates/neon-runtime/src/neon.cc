@@ -384,6 +384,11 @@ extern "C" void Neon_Class_GetName(const char **chars_out, size_t *len_out, v8::
   *len_out = name.GetLength();
 }
 
+extern "C" void Neon_Class_ThrowAllocateError(v8::Isolate *isolate, void *metadata_pointer) {
+  neon::BaseClassMetadata *metadata = static_cast<neon::BaseClassMetadata *>(metadata_pointer);
+  Nan::ThrowTypeError(metadata->GetAllocateError().ToJsString(isolate, "type cannot be constructed from javascript."));
+}
+
 extern "C" void Neon_Class_ThrowCallError(v8::Isolate *isolate, void *metadata_pointer) {
   neon::ClassMetadata *metadata = static_cast<neon::ClassMetadata *>(metadata_pointer);
   Nan::ThrowTypeError(metadata->GetCallError().ToJsString(isolate, "constructor called without new."));

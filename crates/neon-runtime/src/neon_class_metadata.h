@@ -99,7 +99,7 @@ public:
     return existing_kernel_;
   }
 
-  void SetName(Slice name) {
+  virtual void SetName(Slice name) {
     class_name_ = new String(name.GetLength());
     *class_name_ << name;
 
@@ -212,6 +212,7 @@ public:
     allocate_callback_ = allocate_callback;
     allocate_kernel_ = allocate_kernel;
     drop_instance_ = drop_instance;
+    allocate_error_ = nullptr;
   }
 
   void *GetAllocateKernel() {
@@ -245,6 +246,24 @@ public:
     return wrapped;
   }
 
+  virtual void SetName(Slice name) {
+    ClassMetadata::SetName(name);
+
+    allocate_error_ = new String(sizeof(" type cannot be constructed from javascript.") - 1 + name.GetLength());
+    *allocate_error_ << name << " type cannot be constructed from javascript.";
+  }
+
+  Slice GetAllocateError() {
+    return allocate_error_->Borrow();
+  }
+
+protected:
+  virtual ~BaseClassMetadata() {
+    if (allocate_error_) {
+      delete allocate_error_;
+    }
+  }
+
 private:
 
   Neon_AllocateCallback allocate_callback_;
@@ -253,6 +272,7 @@ private:
   v8::Global<v8::Object> instance_;
 
   void *wrapped_allocation_;
+  String *allocate_error_;
 };
 
 }; // end namespace neon

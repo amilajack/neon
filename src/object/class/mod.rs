@@ -43,7 +43,7 @@ impl ClassMap {
 #[doc(hidden)]
 pub struct ClassDescriptor<'a, T: Class> {
     name: &'a str,
-    allocate: AllocateCallback<T>,
+    allocate: Option<AllocateCallback<T>>,
     call: Option<ConstructorCallCallback>,
     construct: Option<ConstructCallback<T>>,
     existing: Option<ConstructExistingCallback<T>>,
@@ -52,16 +52,24 @@ pub struct ClassDescriptor<'a, T: Class> {
 
 impl<'a, T: Class> ClassDescriptor<'a, T> {
 
-    /// Constructs a new minimal `ClassDescriptor` with a name and allocator.
-    pub fn new<'b, U: Class>(name: &'b str, allocate: AllocateCallback<U>) -> ClassDescriptor<'b, U> {
+    /// Constructs a new minimal `ClassDescriptor` with a name.
+    pub fn new<'b, U: Class>(name: &'b str) -> ClassDescriptor<'b, U> {
         ClassDescriptor {
             name: name,
-            allocate: allocate,
+            allocate: None,
             call: None,
             construct: None,
             existing: None,
             methods: Vec::new()
         }
+    }
+
+    /// Adds an allocator for JS construction to this class descriptor.
+    /// Without this, the class can only be constructed from Rust
+    /// using an existing struct instance
+    pub fn allocate(mut self, callback: AllocateCallback<T>) -> Self {
+        self.allocate = Some(callback);
+        self
     }
 
     /// Adds `[[Call]]` behavior for the constructor to this class descriptor.
@@ -132,8 +140,8 @@ pub trait Class: Managed + Any {
     }
 
     #[doc(hidden)]
-    fn describe<'a>(name: &'a str, allocate: AllocateCallback<Self>) -> ClassDescriptor<'a, Self> {
-        ClassDescriptor::<Self>::new(name, allocate)
+    fn describe<'a>(name: &'a str) -> ClassDescriptor<'a, Self> {
+        ClassDescriptor::<Self>::new(name)
     }
 }
 
@@ -165,7 +173,7 @@ pub(crate) trait ClassInternal: Class {
         unsafe {
             let isolate: *mut c_void = mem::transmute(cx.isolate());
 
-            let allocate = descriptor.allocate.into_c_callback();
+            let allocate = descriptor.allocate.unwrap_or_else(AllocateCallback::default::<Self>).into_c_callback();
             let construct = descriptor.construct.map(|callback| callback.into_c_callback()).unwrap_or_default();
             let existing = descriptor.existing.map(|callback| callback.into_c_callback()).unwrap_or_default();
             let call = descriptor.call.unwrap_or_else(ConstructorCallCallback::default::<Self>).into_c_callback();

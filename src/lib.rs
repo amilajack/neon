@@ -112,13 +112,13 @@ macro_rules! class_definition {
         class_definition!($cls ;
                           $cname ;
                           $typ ;
-                          {
+                          ({
                               fn _______allocator_rust_y_u_no_hygienic_items_______($cx: $crate::context::CallContext<$crate::types::JsUndefined>) -> $crate::result::NeonResult<$typ> {
                                   $body
                               }
 
                               $crate::macro_internal::AllocateCallback(_______allocator_rust_y_u_no_hygienic_items_______)
-                          } ;
+                          }) ;
                           $call_ctor ;
                           $new_ctor ;
                           $existing_ctor ;
@@ -203,12 +203,13 @@ macro_rules! class_definition {
                           $($rest)*);
     };
 
-    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:block ; ($($call_ctor:block)*) ; ($($new_ctor:block)*) ; ($($existing_ctor:block)*) ; ($($mname:ident)*) ; ($($mdef:block)*) ; $($rest:tt)* ) => {
+    ( $cls:ident ; $cname:ident ; $typ:ty ; ($($allocator:block)*) ; ($($call_ctor:block)*) ; ($($new_ctor:block)*) ; ($($existing_ctor:block)*) ; ($($mname:ident)*) ; ($($mdef:block)*) ; $($rest:tt)* ) => {
         impl $crate::object::Class for $cls {
             type Internals = $typ;
 
             fn setup<'a, C: $crate::context::Context<'a>>(_: &mut C) -> $crate::result::NeonResult<$crate::object::ClassDescriptor<'a, Self>> {
-                ::std::result::Result::Ok(Self::describe(stringify!($cname), $allocator)
+                ::std::result::Result::Ok(Self::describe(stringify!($cname))
+                                             $(.allocate($allocator))*
                                              $(.construct($new_ctor))*
                                              $(.existing($existing_ctor))*
                                              $(.call($call_ctor))*

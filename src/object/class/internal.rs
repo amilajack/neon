@@ -80,6 +80,21 @@ impl Callback<()> for ConstructorCallCallback {
 #[repr(C)]
 pub struct AllocateCallback<T: Class>(pub fn(CallContext<JsUndefined>) -> NeonResult<T::Internals>);
 
+impl<T: Class> AllocateCallback<T> {
+    pub(crate) fn default<U: Class>() -> Self {
+        fn callback<U: Class>(mut cx: CallContext<JsUndefined>) -> NeonResult<U::Internals> {
+            unsafe {
+                if let Ok(metadata) = U::metadata(&mut cx) {
+                    neon_runtime::class::throw_allocate_error(mem::transmute(cx.isolate()), metadata.pointer);
+                }
+            }
+            Err(Throw)
+        }
+
+        AllocateCallback(callback::<T>)
+    }
+}
+
 impl<T: Class> Callback<*mut c_void> for AllocateCallback<T> {
     extern "C" fn invoke(info: &CallbackInfo) -> *mut c_void {
         unsafe {
