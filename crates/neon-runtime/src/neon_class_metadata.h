@@ -55,9 +55,16 @@ private:
 class ClassMetadata {
 public:
 
-  ClassMetadata(Neon_ConstructCallback construct_callback, void *construct_kernel, v8::FunctionCallback call_callback, void *call_kernel) {
+  ClassMetadata(Neon_ConstructCallback construct_callback, 
+                void *construct_kernel,
+                Neon_ConstructCallback existing_callback,
+                void *existing_kernel,
+                v8::FunctionCallback call_callback,
+                void *call_kernel) {
     construct_callback_ = construct_callback;
     construct_kernel_ = construct_kernel;
+    existing_callback_ = existing_callback;
+    existing_kernel_ = existing_kernel;
     call_callback_ = call_callback;
     call_kernel_ = call_kernel;
     class_name_ = nullptr;
@@ -88,7 +95,11 @@ public:
     return construct_kernel_;
   }
 
-  void SetName(Slice name) {
+  void *GetConstructExistingKernel() {
+    return existing_kernel_;
+  }
+
+  virtual void SetName(Slice name) {
     class_name_ = new String(name.GetLength());
     *class_name_ << name;
 
@@ -128,6 +139,8 @@ protected:
 
   Neon_ConstructCallback construct_callback_;
   void *construct_kernel_;
+  Neon_ConstructCallback existing_callback_;
+  void *existing_kernel_;
   v8::FunctionCallback call_callback_;
   void *call_kernel_;
 
@@ -185,16 +198,21 @@ public:
 
   BaseClassMetadata(Neon_ConstructCallback construct_callback,
                     void *construct_kernel,
+                    Neon_ConstructCallback existing_callback,
+                    void *existing_kernel,
                     v8::FunctionCallback call_callback,
                     void *call_kernel,
                     Neon_AllocateCallback allocate_callback,
                     void *allocate_kernel,
                     Neon_DropCallback drop_instance)
-    : ClassMetadata(construct_callback, construct_kernel, call_callback, call_kernel)
+    : ClassMetadata(construct_callback, construct_kernel, 
+                    existing_callback, existing_kernel, 
+                    call_callback, call_kernel)
   {
     allocate_callback_ = allocate_callback;
     allocate_kernel_ = allocate_kernel;
     drop_instance_ = drop_instance;
+    allocate_error_ = nullptr;
   }
 
   void *GetAllocateKernel() {
@@ -202,15 +220,46 @@ public:
   }
 
   virtual void construct(const v8::FunctionCallbackInfo<v8::Value>& info) {
-    void *internals = allocate_callback_(&info);
-    if (!internals) {
-      return;
+    void *internals;
+    bool from_existing = existing_internal_;
+    if(from_existing) {
+      internals = existing_internal_;
+      existing_internal_ = nullptr;
+    } else {
+      internals = allocate_callback_(&info);
+      if (!internals) {
+        return;
+      }
     }
     v8::Local<v8::Object> self = info.This();
     BaseClassInstanceMetadata *instance = new BaseClassInstanceMetadata(info.GetIsolate(), self, internals, drop_instance_);
     self->SetAlignedPointerInInternalField(0, instance);
-    if (construct_kernel_) {
+    if (from_existing && existing_kernel_) {
+      existing_callback_(&info);
+    } else if (construct_kernel_) {
       construct_callback_(&info);
+    }
+  }
+
+  void SetExistingInternal(void *existing_internal) {
+    existing_internal_ = existing_internal;
+  }
+
+  virtual void SetName(Slice name) {
+    ClassMetadata::SetName(name);
+
+    allocate_error_ = new String(sizeof(" type cannot be constructed from javascript.") - 1 + name.GetLength());
+    *allocate_error_ << name << " type cannot be constructed from javascript.";
+  }
+
+  Slice GetAllocateError() {
+    return allocate_error_->Borrow();
+  }
+
+protected:
+  virtual ~BaseClassMetadata() {
+    if (allocate_error_) {
+      delete allocate_error_;
     }
   }
 
@@ -220,6 +269,9 @@ private:
   void *allocate_kernel_;
   Neon_DropCallback drop_instance_;
   v8::Global<v8::Object> instance_;
+
+  void *existing_internal_;
+  String *allocate_error_;
 };
 
 }; // end namespace neon

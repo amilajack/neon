@@ -92,11 +92,13 @@ extern "C" {
   void *Neon_Class_CreateBase(v8::Isolate *isolate,
                               callback_t allocate,
                               callback_t construct,
+                              callback_t existing,
                               callback_t call,
                               Neon_DropCallback drop);
   // FIXME: get rid of all the "kernel" nomenclature
   void *Neon_Class_GetCallKernel(v8::Local<v8::External> wrapper);
   void *Neon_Class_GetConstructKernel(v8::Local<v8::External> wrapper);
+  void *Neon_Class_GetConstructExistingKernel(v8::Local<v8::External> wrapper);
   void *Neon_Class_GetAllocateKernel(v8::Local<v8::External> wrapper);
   bool Neon_Class_Constructor(v8::Local<v8::Function> *out, v8::Local<v8::FunctionTemplate> ft);
   bool Neon_Class_HasInstance(void *metadata, v8::Local<v8::Value> v);

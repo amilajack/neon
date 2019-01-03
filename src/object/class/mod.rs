@@ -7,6 +7,7 @@ use std::mem;
 use std::os::raw::c_void;
 use std::slice;
 use std::collections::HashMap;
+use std::iter;
 use neon_runtime;
 use neon_runtime::raw;
 use neon_runtime::call::CCallback;
@@ -18,7 +19,7 @@ use handle::{Handle, Managed};
 use types::{Value, JsFunction, JsValue, build};
 use types::internal::ValueInternal;
 use object::{Object, This};
-use self::internal::{ClassMetadata, MethodCallback, ConstructorCallCallback, AllocateCallback, ConstructCallback};
+use self::internal::{ClassMetadata, MethodCallback, ConstructorCallCallback, AllocateCallback, ConstructCallback, ConstructExistingCallback};
 
 pub(crate) struct ClassMap {
     map: HashMap<TypeId, ClassMetadata>
@@ -43,23 +44,33 @@ impl ClassMap {
 #[doc(hidden)]
 pub struct ClassDescriptor<'a, T: Class> {
     name: &'a str,
-    allocate: AllocateCallback<T>,
+    allocate: Option<AllocateCallback<T>>,
     call: Option<ConstructorCallCallback>,
     construct: Option<ConstructCallback<T>>,
+    existing: Option<ConstructExistingCallback<T>>,
     methods: Vec<(&'a str, MethodCallback<T>)>
 }
 
 impl<'a, T: Class> ClassDescriptor<'a, T> {
 
-    /// Constructs a new minimal `ClassDescriptor` with a name and allocator.
-    pub fn new<'b, U: Class>(name: &'b str, allocate: AllocateCallback<U>) -> ClassDescriptor<'b, U> {
+    /// Constructs a new minimal `ClassDescriptor` with a name.
+    pub fn new<'b, U: Class>(name: &'b str) -> ClassDescriptor<'b, U> {
         ClassDescriptor {
             name: name,
-            allocate: allocate,
+            allocate: None,
             call: None,
             construct: None,
+            existing: None,
             methods: Vec::new()
         }
+    }
+
+    /// Adds an allocator for JS construction to this class descriptor.
+    /// Without this, the class can only be constructed from Rust
+    /// using an existing struct instance
+    pub fn allocate(mut self, callback: AllocateCallback<T>) -> Self {
+        self.allocate = Some(callback);
+        self
     }
 
     /// Adds `[[Call]]` behavior for the constructor to this class descriptor.
@@ -71,6 +82,13 @@ impl<'a, T: Class> ClassDescriptor<'a, T> {
     /// Adds `[[Construct]]` behavior for the constructor to this class descriptor.
     pub fn construct(mut self, callback: ConstructCallback<T>) -> Self {
         self.construct = Some(callback);
+        self
+    }
+
+    /// Adds `[[Construct]]` behavior for the constructor to this class descriptor
+    /// for existing rust struct instance
+    pub fn existing(mut self, callback: ConstructExistingCallback<T>) -> Self {
+        self.existing = Some(callback);
         self
     }
 
@@ -112,9 +130,28 @@ pub trait Class: Managed + Any {
         constructor.construct(cx, args)
     }
 
+    /// Method for constructing new instances of this class from an existing rust struct instance.
+    /// Supply args into the [[Constructor]] behavour if needed
+    fn from_existing_withargs<'a, 'b, C: Context<'a>, A, AS>(cx: &mut C, existing: Self::Internals, args: AS) -> JsResult<'a, Self>
+        where A: Value + 'b,
+              AS: IntoIterator<Item=Handle<'b, A>>
+    {
+        let metadata = Self::metadata(cx)?;
+        let constructor = unsafe { metadata.constructor(cx)? };
+        unsafe { metadata.set_existing_internal::<Self::Internals>(existing) };
+        constructor.construct(cx, args)
+    }
+
+    /// Method for constructing new instances of this class from an
+    /// existing rust struct instance without any args
+    fn from_existing<'a, C: Context<'a>>(cx: &mut C, existing: Self::Internals) -> JsResult<'a, Self>
+    {
+        Self::from_existing_withargs(cx, existing, iter::empty::<Handle<JsValue>>())
+    }
+
     #[doc(hidden)]
-    fn describe<'a>(name: &'a str, allocate: AllocateCallback<Self>) -> ClassDescriptor<'a, Self> {
-        ClassDescriptor::<Self>::new(name, allocate)
+    fn describe<'a>(name: &'a str) -> ClassDescriptor<'a, Self> {
+        ClassDescriptor::<Self>::new(name)
     }
 }
 
@@ -146,13 +183,15 @@ pub(crate) trait ClassInternal: Class {
         unsafe {
             let isolate: *mut c_void = mem::transmute(cx.isolate());
 
-            let allocate = descriptor.allocate.into_c_callback();
+            let allocate = descriptor.allocate.unwrap_or_else(AllocateCallback::default::<Self>).into_c_callback();
             let construct = descriptor.construct.map(|callback| callback.into_c_callback()).unwrap_or_default();
+            let existing = descriptor.existing.map(|callback| callback.into_c_callback()).unwrap_or_default();
             let call = descriptor.call.unwrap_or_else(ConstructorCallCallback::default::<Self>).into_c_callback();
 
             let metadata_pointer = neon_runtime::class::create_base(isolate,
                                                                     allocate,
                                                                     construct,
+                                                                    existing,
                                                                     call,
                                                                     drop_internals::<Self::Internals>);
 

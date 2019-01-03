@@ -108,31 +108,33 @@ macro_rules! register_module {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! class_definition {
-    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $mnames:tt ; $mdefs:tt ; init($cx:pat) $body:block $($rest:tt)* ) => {
+    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $existing_ctor:tt ; $mnames:tt ; $mdefs:tt ; init($cx:pat) $body:block $($rest:tt)* ) => {
         class_definition!($cls ;
                           $cname ;
                           $typ ;
-                          {
+                          ({
                               fn _______allocator_rust_y_u_no_hygienic_items_______($cx: $crate::context::CallContext<$crate::types::JsUndefined>) -> $crate::result::NeonResult<$typ> {
                                   $body
                               }
 
                               $crate::macro_internal::AllocateCallback(_______allocator_rust_y_u_no_hygienic_items_______)
-                          } ;
+                          }) ;
                           $call_ctor ;
                           $new_ctor ;
+                          $existing_ctor ;
                           $mnames ;
                           $mdefs ;
                           $($rest)*);
     };
 
-    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; ($($mname:tt)*) ; ($($mdef:tt)*) ; method $name:ident($cx:pat) $body:block $($rest:tt)* ) => {
+    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $existing_ctor:tt ; ($($mname:tt)*) ; ($($mdef:tt)*) ; method $name:ident($cx:pat) $body:block $($rest:tt)* ) => {
         class_definition!($cls ;
                           $cname ;
                           $typ ;
                           $allocator ;
                           $call_ctor ;
                           $new_ctor ;
+                          $existing_ctor ;
                           ($($mname)* $name) ;
                           ($($mdef)* {
                               fn _______method_rust_y_u_no_hygienic_items_______($cx: $crate::context::CallContext<$cls>) -> $crate::result::JsResult<$crate::types::JsValue> {
@@ -144,7 +146,7 @@ macro_rules! class_definition {
                           $($rest)*);
     };
 
-    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $mnames:tt ; $mdefs:tt ; constructor($cx:pat) $body:block $($rest:tt)* ) => {
+    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $existing_ctor:tt ; $mnames:tt ; $mdefs:tt ; constructor($cx:pat) $body:block $($rest:tt)* ) => {
         class_definition!($cls ;
                           $cname ;
                           $typ ;
@@ -157,12 +159,32 @@ macro_rules! class_definition {
 
                               $crate::macro_internal::ConstructCallback(_______constructor_rust_y_u_no_hygienic_items_______)
                           }) ;
+                          $existing_ctor ;
                           $mnames ;
                           $mdefs ;
                           $($rest)*);
     };
 
-    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $mnames:tt ; $mdefs:tt ; call($cx:pat) $body:block $($rest:tt)* ) => {
+    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $existing_ctor:tt ; $mnames:tt ; $mdefs:tt ; constructor_existing($cx:pat) $body:block $($rest:tt)* ) => {
+        class_definition!($cls ;
+                          $cname ;
+                          $typ ;
+                          $allocator ;
+                          $call_ctor ;
+                          $new_ctor ;
+                          ({
+                              fn _______constructor_existing_rust_y_u_no_hygienic_items_______($cx: $crate::context::CallContext<$cls>) -> $crate::result::NeonResult<Option<$crate::handle::Handle<$crate::types::JsObject>>> {
+                                  $body
+                              }
+
+                              $crate::macro_internal::ConstructExistingCallback(_______constructor_existing_rust_y_u_no_hygienic_items_______)
+                          }) ;
+                          $mnames ;
+                          $mdefs ;
+                          $($rest)*);
+    };
+
+    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $existing_ctor:tt ; $mnames:tt ; $mdefs:tt ; call($cx:pat) $body:block $($rest:tt)* ) => {
         class_definition!($cls ;
                           $cname ;
                           $typ ;
@@ -175,18 +197,21 @@ macro_rules! class_definition {
                               $crate::macro_internal::ConstructorCallCallback(_______call_rust_y_u_no_hygienic_items_______)
                           }) ;
                           $new_ctor ;
+                          $existing_ctor ;
                           $mnames ;
                           $mdefs ;
                           $($rest)*);
     };
 
-    ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:block ; ($($call_ctor:block)*) ; ($($new_ctor:block)*) ; ($($mname:ident)*) ; ($($mdef:block)*) ; $($rest:tt)* ) => {
+    ( $cls:ident ; $cname:ident ; $typ:ty ; ($($allocator:block)*) ; ($($call_ctor:block)*) ; ($($new_ctor:block)*) ; ($($existing_ctor:block)*) ; ($($mname:ident)*) ; ($($mdef:block)*) ; $($rest:tt)* ) => {
         impl $crate::object::Class for $cls {
             type Internals = $typ;
 
             fn setup<'a, C: $crate::context::Context<'a>>(_: &mut C) -> $crate::result::NeonResult<$crate::object::ClassDescriptor<'a, Self>> {
-                ::std::result::Result::Ok(Self::describe(stringify!($cname), $allocator)
+                ::std::result::Result::Ok(Self::describe(stringify!($cname))
+                                             $(.allocate($allocator))*
                                              $(.construct($new_ctor))*
+                                             $(.existing($existing_ctor))*
                                              $(.call($call_ctor))*
                                              $(.method(stringify!($mname), $mdef))*)
             }
@@ -263,7 +288,7 @@ macro_rules! declare_types {
 
         impl_managed!($cls);
 
-        class_definition!($cls ; $cname ; $typ ; () ; () ; () ; () ; () ; $($body)*);
+        class_definition!($cls ; $cname ; $typ ; () ; () ; () ; () ; () ; () ; $($body)*);
 
         declare_types! { $($rest)* }
     };
@@ -276,7 +301,7 @@ macro_rules! declare_types {
 
         impl_managed!($cls);
 
-        class_definition!($cls ; $cname ; $typ ; () ; () ; () ; () ; () ; $($body)*);
+        class_definition!($cls ; $cname ; $typ ; () ; () ; () ; () ; () ; () ; $($body)*);
 
         declare_types! { $($rest)* }
     };

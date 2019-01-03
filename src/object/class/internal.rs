@@ -80,6 +80,21 @@ impl Callback<()> for ConstructorCallCallback {
 #[repr(C)]
 pub struct AllocateCallback<T: Class>(pub fn(CallContext<JsUndefined>) -> NeonResult<T::Internals>);
 
+impl<T: Class> AllocateCallback<T> {
+    pub(crate) fn default<U: Class>() -> Self {
+        fn callback<U: Class>(mut cx: CallContext<JsUndefined>) -> NeonResult<U::Internals> {
+            unsafe {
+                if let Ok(metadata) = U::metadata(&mut cx) {
+                    neon_runtime::class::throw_allocate_error(mem::transmute(cx.isolate()), metadata.pointer);
+                }
+            }
+            Err(Throw)
+        }
+
+        AllocateCallback(callback::<T>)
+    }
+}
+
 impl<T: Class> Callback<*mut c_void> for AllocateCallback<T> {
     extern "C" fn invoke(info: &CallbackInfo) -> *mut c_void {
         unsafe {
@@ -130,6 +145,33 @@ impl<T: Class> Callback<bool> for ConstructCallback<T> {
 }
 
 #[repr(C)]
+pub struct ConstructExistingCallback<T: Class>(pub fn(CallContext<T>) -> NeonResult<Option<Handle<JsObject>>>);
+
+impl<T: Class> Callback<bool> for ConstructExistingCallback<T> {
+    extern "C" fn invoke(info: &CallbackInfo) -> bool {
+        unsafe {
+            info.with_cx(|cx| {
+                let data = info.data();
+                let kernel: fn(CallContext<T>) -> NeonResult<Option<Handle<JsObject>>> =
+                    mem::transmute(neon_runtime::class::get_construct_existing_kernel(data.to_raw()));
+                match convert_panics(|| { kernel(cx) }) {
+                    Ok(None) => true,
+                    Ok(Some(obj)) => {
+                        info.set_return(obj);
+                        true
+                    }
+                    _ => false
+                }
+            })
+        }
+    }
+
+    fn as_ptr(self) -> *mut c_void {
+        self.0 as *mut c_void
+    }
+}
+
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct ClassMetadata {
     pub(crate) pointer: *mut c_void
@@ -140,6 +182,11 @@ impl ClassMetadata {
         build(|out| {
             neon_runtime::class::metadata_to_constructor(out, mem::transmute(cx.isolate()), self.pointer)
         })
+    }
+
+    pub unsafe fn set_existing_internal<T>(&self, existing: T) {
+        let p = Box::into_raw(Box::new(existing));
+        neon_runtime::class::set_existing_internal(self.pointer, mem::transmute(p));
     }
 
     pub unsafe fn has_instance(&self, value: raw::Local) -> bool {

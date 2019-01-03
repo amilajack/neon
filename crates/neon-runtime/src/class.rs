@@ -14,6 +14,7 @@ extern "C" {
     pub fn create_base(isolate: *mut Isolate,
                        allocate: CCallback,
                        construct: CCallback,
+                       existing: CCallback,
                        call: CCallback,
                        drop: extern "C" fn(*mut c_void)) -> *mut c_void;
 
@@ -22,6 +23,9 @@ extern "C" {
 
     #[link_name = "Neon_Class_SetName"]
     pub fn set_name(isolate: *mut Isolate, metadata: *mut c_void, name: *const u8, byte_length: u32) -> bool;
+
+    #[link_name = "Neon_Class_ThrowAllocateError"]
+    pub fn throw_allocate_error(isolate: *mut Isolate, metadata: *mut c_void);
 
     #[link_name = "Neon_Class_ThrowCallError"]
     pub fn throw_call_error(isolate: *mut Isolate, metadata: *mut c_void);
@@ -43,8 +47,14 @@ extern "C" {
     #[link_name = "Neon_Class_GetConstructKernel"]
     pub fn get_construct_kernel(obj: Local) -> *mut c_void;
 
+    #[link_name = "Neon_Class_GetConstructExistingKernel"]
+    pub fn get_construct_existing_kernel(obj: Local) -> *mut c_void;
+
     #[link_name = "Neon_Class_GetCallKernel"]
     pub fn get_call_kernel(obj: Local) -> *mut c_void;
+
+    #[link_name = "Neon_Class_SetExistingInternal"]
+    pub fn set_existing_internal(metadata: *mut c_void, existing_internal: *mut c_void);
 
     #[link_name = "Neon_Class_Constructor"]
     pub fn constructor(out: &mut Local, ft: Local) -> bool;
@@ -54,5 +64,4 @@ extern "C" {
 
     #[link_name = "Neon_Class_GetInstanceInternals"]
     pub fn get_instance_internals(obj: Local) -> *mut c_void;
-
 }

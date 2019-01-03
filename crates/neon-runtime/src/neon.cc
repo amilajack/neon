@@ -288,13 +288,15 @@ extern "C" void Neon_Class_ConstructBaseCallback(const v8::FunctionCallbackInfo<
 extern "C" void *Neon_Class_CreateBase(v8::Isolate *isolate,
                                        callback_t allocate,
                                        callback_t construct,
+                                       callback_t existing,
                                        callback_t call,
                                        Neon_DropCallback drop)
 {
   Neon_AllocateCallback allocate_callback = reinterpret_cast<Neon_AllocateCallback>(allocate.static_callback);
   Neon_ConstructCallback construct_callback = reinterpret_cast<Neon_ConstructCallback>(construct.static_callback);
+  Neon_ConstructCallback existing_callback = reinterpret_cast<Neon_ConstructCallback>(existing.static_callback);
   v8::FunctionCallback call_callback = reinterpret_cast<v8::FunctionCallback>(call.static_callback);
-  neon::BaseClassMetadata *metadata = new neon::BaseClassMetadata(construct_callback, construct.dynamic_callback, call_callback, call.dynamic_callback, allocate_callback, allocate.dynamic_callback, drop);
+  neon::BaseClassMetadata *metadata = new neon::BaseClassMetadata(construct_callback, construct.dynamic_callback,existing_callback, existing.dynamic_callback, call_callback, call.dynamic_callback, allocate_callback, allocate.dynamic_callback, drop);
   v8::Local<v8::External> data = v8::External::New(isolate, metadata);
   v8::Local<v8::FunctionTemplate> constructor_template = v8::FunctionTemplate::New(isolate, Neon_Class_ConstructBaseCallback, data);
   metadata->SetTemplate(isolate, constructor_template);
@@ -332,9 +334,19 @@ extern "C" void *Neon_Class_GetConstructKernel(v8::Local<v8::External> wrapper) 
   return metadata->GetConstructKernel();
 }
 
+extern "C" void *Neon_Class_GetConstructExistingKernel(v8::Local<v8::External> wrapper) {
+  neon::ClassMetadata *metadata = static_cast<neon::ClassMetadata *>(wrapper->Value());
+  return metadata->GetConstructExistingKernel();
+}
+
 extern "C" void *Neon_Class_GetAllocateKernel(v8::Local<v8::External> wrapper) {
   neon::BaseClassMetadata *metadata = static_cast<neon::BaseClassMetadata *>(wrapper->Value());
   return metadata->GetAllocateKernel();
+}
+
+extern "C" void Neon_Class_SetExistingInternal(void *metadata_pointer, void *existing_internal) {
+  neon::BaseClassMetadata *metadata = static_cast<neon::BaseClassMetadata *>(metadata_pointer);
+  metadata->SetExistingInternal(existing_internal);
 }
 
 extern "C" bool Neon_Class_Constructor(v8::Local<v8::Function> *out, v8::Local<v8::FunctionTemplate> ft) {
@@ -365,6 +377,11 @@ extern "C" void Neon_Class_GetName(const char **chars_out, size_t *len_out, v8::
   neon::Slice name = metadata->GetName();
   *chars_out = name.GetBuffer();
   *len_out = name.GetLength();
+}
+
+extern "C" void Neon_Class_ThrowAllocateError(v8::Isolate *isolate, void *metadata_pointer) {
+  neon::BaseClassMetadata *metadata = static_cast<neon::BaseClassMetadata *>(metadata_pointer);
+  Nan::ThrowTypeError(metadata->GetAllocateError().ToJsString(isolate, "type cannot be constructed from javascript."));
 }
 
 extern "C" void Neon_Class_ThrowCallError(v8::Isolate *isolate, void *metadata_pointer) {
