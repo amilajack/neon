@@ -1,13 +1,13 @@
 [package]
-name = "tests"
+name = "electron-tests"
 version = "0.1.0"
+edition = "2018"
 authors = ["The Neon Community"]
 license = "MIT/Apache-2.0"
 build = "build.rs"
-edition = "2018"
 
 [lib]
-name = "tests"
+name = "electron_tests"
 crate-type = ["cdylib"]
 
 [build-dependencies]

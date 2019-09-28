@@ -18,6 +18,7 @@ pub mod object;
 pub mod borrow;
 pub mod result;
 pub mod task;
+pub mod eventhandler;
 pub mod meta;
 pub mod prelude;
 
@@ -49,6 +50,7 @@ macro_rules! register_module {
         #[cfg_attr(target_os = "linux", link_section = ".ctors")]
         #[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
         #[cfg_attr(target_os = "windows", link_section = ".CRT$XCU")]
+        #[used]
         pub static __LOAD_NEON_MODULE: extern "C" fn() = {
             fn __init_neon_module($module: $crate::context::ModuleContext) -> $crate::result::NeonResult<()> $init
 
@@ -69,6 +71,8 @@ macro_rules! register_module {
                     link: *mut __NodeModule
                 }
 
+                // Mark as used during tests to suppress warnings
+                #[cfg_attr(test, used)]
                 static mut __NODE_MODULE: __NodeModule = __NodeModule {
                     version: 0,
                     flags: 0,
@@ -93,6 +97,8 @@ macro_rules! register_module {
                 // Suppress the default Rust panic hook, which prints diagnostics to stderr.
                 ::std::panic::set_hook(::std::boxed::Box::new(|_| { }));
 
+                // During tests, node is not available. Skip module registration.
+                #[cfg(not(test))]
                 unsafe {
                     // Set the ABI version based on the NODE_MODULE_VERSION constant provided by the current node headers.
                     __NODE_MODULE.version = $crate::macro_internal::runtime::module::get_version();
@@ -106,7 +112,7 @@ macro_rules! register_module {
 }
 
 #[doc(hidden)]
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! class_definition {
     ( $cls:ident ; $cname:ident ; $typ:ty ; $allocator:tt ; $call_ctor:tt ; $new_ctor:tt ; $mnames:tt ; $mdefs:tt ; init($cx:pat) $body:block $($rest:tt)* ) => {
         class_definition!($cls ;
@@ -185,17 +191,17 @@ macro_rules! class_definition {
             type Internals = $typ;
 
             fn setup<'a, C: $crate::context::Context<'a>>(_: &mut C) -> $crate::result::NeonResult<$crate::object::ClassDescriptor<'a, Self>> {
-                ::std::result::Result::Ok(Self::describe(stringify!($cname), $allocator)
+                ::std::result::Result::Ok(Self::describe(neon_stringify!($cname), $allocator)
                                              $(.construct($new_ctor))*
                                              $(.call($call_ctor))*
-                                             $(.method(stringify!($mname), $mdef))*)
+                                             $(.method(neon_stringify!($mname), $mdef))*)
             }
         }
     };
 }
 
 #[doc(hidden)]
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! impl_managed {
     ($cls:ident) => {
         impl $crate::handle::Managed for $cls {
@@ -248,7 +254,7 @@ macro_rules! impl_managed {
 ///
 /// }
 /// ```
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! declare_types {
     { $(#[$attr:meta])* pub class $cls:ident for $typ:ident { $($body:tt)* } $($rest:tt)* } => {
         declare_types! { $(#[$attr])* pub class $cls as $typ for $typ { $($body)* } $($rest)* }
@@ -285,6 +291,14 @@ macro_rules! declare_types {
     };
 
     { } => { };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! neon_stringify {
+    ($($inner:tt)*) => {
+        stringify! { $($inner)* }
+    }
 }
 
 #[cfg(all(windows, not(neon_profile = "release")))]
@@ -374,5 +388,44 @@ mod tests {
         let test_dynamic = project_root().join("test").join("dynamic");
         run("npm install", &test_dynamic);
         run("npm test", &test_dynamic);
+    }
+
+    #[test]
+    fn dynamic_cargo_test() {
+        let _guard = TEST_MUTEX.lock();
+
+        log("dynamic_cargo_test");
+
+        let test_dynamic_cargo = project_root().join("test").join("dynamic").join("native");
+        run("cargo test --release", &test_dynamic_cargo);
+    }
+
+    #[test]
+    fn electron_test() {
+        let _guard = TEST_MUTEX.lock();
+
+        log("electron_test");
+
+        cli_setup();
+
+        let test_electron = project_root().join("test").join("electron");
+        run("npm install", &test_electron);
+        run("npm test", &test_electron);
+    }
+
+    #[test]
+    fn package_test() {
+        let _guard = TEST_MUTEX.lock();
+
+        log("package_test");
+
+        let test_package = project_root().join("crates").join("neon-runtime");
+
+        // Allow uncommitted changes outside of CI
+        if std::env::var("CI") == Ok("true".to_string()) {
+            run("cargo package", &test_package);
+        } else {
+            run("cargo package --allow-dirty", &test_package);            
+        }
     }
 }

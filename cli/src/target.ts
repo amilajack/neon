@@ -48,8 +48,12 @@ export default class Target {
       this.triple = '';
     }
 
+    if (process.env.CARGO_BUILD_TARGET) {
+      this.triple = process.env.CARGO_BUILD_TARGET;
+    }
+
     this.subdirectory = path.join(this.triple, release ? 'release' : 'debug');
-    this.root = path.resolve(crate.root, 'target', this.subdirectory);
+    this.root = path.resolve(crate.project.targetDirectory, this.subdirectory);
 
     let prefix = LIB_PREFIX[process.platform];
     let suffix = LIB_SUFFIX[process.platform];

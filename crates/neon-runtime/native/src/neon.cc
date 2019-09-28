@@ -8,6 +8,7 @@
 #include "neon_string.h"
 #include "neon_class_metadata.h"
 #include "neon_task.h"
+#include "neon_threadsafe_cb.h"
 
 extern "C" void Neon_Call_SetReturn(v8::FunctionCallbackInfo<v8::Value> *info, v8::Local<v8::Value> value) {
   info->GetReturnValue().Set(value);
@@ -160,7 +161,11 @@ extern "C" bool Neon_String_New(v8::Local<v8::String> *out, v8::Isolate *isolate
 }
 
 extern "C" int32_t Neon_String_Utf8Length(v8::Local<v8::String> str) {
-  return str->Utf8Length();
+  #if NODE_MODULE_VERSION >= NODE_11_0_MODULE_VERSION
+    return str->Utf8Length(v8::Isolate::GetCurrent());
+  #else
+    return str->Utf8Length();
+  #endif
 }
 
 extern "C" size_t Neon_String_Data(char *out, size_t len, v8::Local<v8::Value> str) {
@@ -193,9 +198,10 @@ extern "C" bool Neon_Buffer_Uninitialized(v8::Local<v8::Object> *out, uint32_t s
   return maybe.ToLocal(out);
 }
 
-extern "C" void Neon_Buffer_Data(void **base_out, size_t *len_out, v8::Local<v8::Object> obj) {
+extern "C" size_t Neon_Buffer_Data(void **base_out, v8::Local<v8::Object> obj) {
   *base_out = node::Buffer::Data(obj);
-  *len_out = node::Buffer::Length(obj);
+
+  return node::Buffer::Length(obj);
 }
 
 extern "C" bool Neon_Tag_IsBuffer(v8::Local<v8::Value> obj) {
@@ -207,10 +213,11 @@ extern "C" bool Neon_ArrayBuffer_New(v8::Local<v8::ArrayBuffer> *out, v8::Isolat
   return true;
 }
 
-extern "C" void Neon_ArrayBuffer_Data(void **base_out, size_t *len_out, v8::Local<v8::ArrayBuffer> buffer) {
+extern "C" size_t Neon_ArrayBuffer_Data(void **base_out, v8::Local<v8::ArrayBuffer> buffer) {
   v8::ArrayBuffer::Contents contents = buffer->GetContents();
   *base_out = contents.Data();
-  *len_out = contents.ByteLength();
+
+  return contents.ByteLength();
 }
 
 
@@ -338,7 +345,7 @@ extern "C" void *Neon_Class_GetAllocateKernel(v8::Local<v8::External> wrapper) {
 }
 
 extern "C" bool Neon_Class_Constructor(v8::Local<v8::Function> *out, v8::Local<v8::FunctionTemplate> ft) {
-  v8::MaybeLocal<v8::Function> maybe = ft->GetFunction();
+  v8::MaybeLocal<v8::Function> maybe = Nan::GetFunction(ft);
   return maybe.ToLocal(out);
 }
 
@@ -360,11 +367,12 @@ extern "C" bool Neon_Class_SetName(v8::Isolate *isolate, void *metadata_pointer,
   return true;
 }
 
-extern "C" void Neon_Class_GetName(const char **chars_out, size_t *len_out, v8::Isolate *isolate, void *metadata_pointer) {
+extern "C" size_t Neon_Class_GetName(const char **chars_out, v8::Isolate *isolate, void *metadata_pointer) {
   neon::ClassMetadata *metadata = static_cast<neon::ClassMetadata *>(metadata_pointer);
   neon::Slice name = metadata->GetName();
   *chars_out = name.GetBuffer();
-  *len_out = name.GetLength();
+
+  return name.GetLength();
 }
 
 extern "C" void Neon_Class_ThrowCallError(v8::Isolate *isolate, void *metadata_pointer) {
@@ -394,7 +402,7 @@ extern "C" bool Neon_Class_AddMethod(v8::Isolate *isolate, void *metadata_pointe
 
 extern "C" bool Neon_Class_MetadataToConstructor(v8::Local<v8::Function> *out, v8::Isolate *isolate, void *metadata) {
   v8::Local<v8::FunctionTemplate> ft = static_cast<neon::ClassMetadata *>(metadata)->GetTemplate(isolate);
-  v8::MaybeLocal<v8::Function> maybe = ft->GetFunction();
+  v8::MaybeLocal<v8::Function> maybe = Nan::GetFunction(ft);
   return maybe.ToLocal(out);
 }
 
@@ -512,4 +520,19 @@ extern "C" void Neon_Task_Schedule(void *task, Neon_TaskPerformCallback perform,
   v8::Isolate *isolate = v8::Isolate::GetCurrent();
   neon::Task *internal_task = new neon::Task(isolate, task, perform, complete, callback);
   neon::queue_task(internal_task);
+}
+
+extern "C" void* Neon_ThreadSafeCallback_New(v8::Local<v8::Value> self, v8::Local<v8::Function> callback) {
+  v8::Isolate *isolate = v8::Isolate::GetCurrent();
+  return new neon::ThreadSafeCallback(isolate, self, callback);
+}
+
+extern "C" void Neon_ThreadSafeCallback_Call(void *thread_safe_cb, void *rust_callback, Neon_ThreadSafeCallbackHandler handler) {
+    neon::ThreadSafeCallback *cb = static_cast<neon::ThreadSafeCallback*>(thread_safe_cb);
+    cb->call(rust_callback, handler);
+}
+
+extern "C" void Neon_ThreadSafeCallback_Delete(void * thread_safe_cb) {
+    neon::ThreadSafeCallback *cb = static_cast<neon::ThreadSafeCallback*>(thread_safe_cb);
+    cb->close();
 }
